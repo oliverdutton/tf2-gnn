@@ -69,15 +69,12 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
     """
     Sudoku Dataset class.
     """
-    adjacency_list = sudoku_edges()
-
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
         return {
             "max_nodes_per_batch": 2700,
             "add_self_loop_edges": True,
             "tie_fwd_bkwd_edges": True,
-            "task_id": 0,
         }
 
     def __init__(self, params: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None):
@@ -99,6 +96,14 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
 
         self._node_feature_shape = None
         self._loaded_data: Dict[DataFold, List[SudokuGraphSample]] = {}
+
+        self.adjacency_list = sudoku_edges()
+        self.processed_adjacency_list = process_adjacency_lists(
+            adjacency_lists=self.adjacency_list,
+            num_nodes=81,
+            add_self_loop_edges=self.params["add_self_loop_edges"],
+            tied_fwd_bkwd_edge_types=self._tied_fwd_bkwd_edge_types,
+        )
         logger.debug("Done initialising Sudoku dataset.")
 
     @property
@@ -112,9 +117,10 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         return data_directory
 
     def load_data(self, path: RichPath, folds_to_load: Optional[Set[DataFold]] = None) -> None:
-        """ Return list of SudokuGraphSamples """
-
-
+        """ 
+        Returns list of SudokuGraphSamples to the dict self._loaded_data with 
+            DataFold.(TRAIN/VALIDATION/TEST) as key
+        """
         """Load the data from disk."""
         if path is None:
             path = RichPath.create(self.default_data_directory())
@@ -155,29 +161,15 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         return self.__process_raw_graphs(encoded)
 
     def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[SudokuGraphSample]:
+
         processed_graphs = [SudokuGraphSample(
-            adjacency_lists=self.adjacency_list,
+            adjacency_lists=self.processed_adjacency_list,
             type_to_node_to_num_incoming_edges=tf.fill((81,), value=20),
             node_features=tf.one_hot(q, 10),
             target_values=tf.one_hot(a, 10),
         ) for q, a in raw_data]
         
         return processed_graphs
-
-    def __graph_to_adjacency_lists(
-        self, graph: Iterable[Tuple[int, int, int]], num_nodes: int
-    ) -> Tuple[List[np.ndarray], np.ndarray]:
-        raw_adjacency_lists = [[] for _ in range(self.num_edge_types)]
-
-        for src, edge_type, dest in graph:
-            raw_adjacency_lists[edge_type].append((src, dest))
-
-        return process_adjacency_lists(
-            adjacency_lists=raw_adjacency_lists,
-            num_nodes=num_nodes,
-            add_self_loop_edges=self.params["add_self_loop_edges"],
-            tied_fwd_bkwd_edge_types=self._tied_fwd_bkwd_edge_types,
-        )
 
     @property
     def node_feature_shape(self) -> Tuple:
