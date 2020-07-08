@@ -16,7 +16,7 @@ from .utils import compute_number_of_edge_types, get_tied_edge_types, process_ad
 logger = logging.getLogger(__name__)
 
 
-def sudoku_edges():
+def sudoku_edges(bidirectional=True):
     """ Gets all the edges between sudoku boxes in a regular 9x9 puzzle. 
     Indexes are 0 to 80
     
@@ -35,7 +35,13 @@ def sudoku_edges():
     for i in range(3):
         for j in range(3):
             squares += cross(idx[i * 3:(i + 1) * 3, j * 3:(j + 1) * 3])
-    return np.asarray(list(set(rows + columns + squares)))
+    ordered_pairs = list(set(rows + columns + squares))
+    unordered_pairs = [(a,b) for a,b in ordered_pairs if a>b]
+    
+    if bidirectional:
+        return unordered_pairs
+    else:
+        return ordered_pairs
 
 class SudokuGraphSample(GraphSample):
     """Data structure holding a single Sudoku graph.
@@ -97,9 +103,9 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         self._node_feature_shape = None
         self._loaded_data: Dict[DataFold, List[SudokuGraphSample]] = {}
 
-        self.adjacency_list = sudoku_edges()
-        self.processed_adjacency_list = process_adjacency_lists(
-            adjacency_lists=self.adjacency_list,
+        self.raw_adjacency_list = [sudoku_edges()]
+        (self.type_to_adjacency_list, self.type_to_num_incoming_edges) = process_adjacency_lists(
+            adjacency_lists=self.raw_adjacency_list,
             num_nodes=81,
             add_self_loop_edges=self.params["add_self_loop_edges"],
             tied_fwd_bkwd_edge_types=self._tied_fwd_bkwd_edge_types,
@@ -163,8 +169,8 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
     def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[SudokuGraphSample]:
 
         processed_graphs = [SudokuGraphSample(
-            adjacency_lists=self.processed_adjacency_list,
-            type_to_node_to_num_incoming_edges=tf.fill((81,), value=20),
+            adjacency_lists=self.type_to_adjacency_list,
+            type_to_node_to_num_incoming_edges=self.type_to_num_incoming_edges,
             node_features=tf.one_hot(q, 10),
             target_values=tf.one_hot(a, 10),
         ) for q, a in raw_data]
