@@ -68,6 +68,7 @@ class GNN(tf.keras.layers.Layer):
             "global_exchange_weighting_fun": "softmax",  # One of "softmax", "sigmoid"
             "global_exchange_num_heads": 4,
             "global_exchange_dropout_rate": 0.2,
+            "share_weights_between_mlps": False,
         }  # type: Dict[str, Any]
         if mp_style is not None:
             these_hypers["message_calculation_class"] = mp_style
@@ -106,6 +107,7 @@ class GNN(tf.keras.layers.Layer):
         self._global_exchange_weighting_fun = params["global_exchange_weighting_fun"]
         self._global_exchange_num_heads = params["global_exchange_num_heads"]
         self._global_exchange_dropout_rate = params["global_exchange_dropout_rate"]
+        self.share_weights_between_mlps = params['share_weights_between_mlps']
 
         # Layer member variables. To be filled in in the `build` method.
         self._initial_projection_layer: tf.keras.layers.Layer = None
@@ -144,12 +146,16 @@ class GNN(tf.keras.layers.Layer):
             for layer_idx in range(self._num_layers):
                 with tf.name_scope(f"Layer_{layer_idx}"):
                     with tf.name_scope("MessagePassing"):
-                        self._mp_layers.append(
-                            self._message_passing_class(self._params)
-                        )
-                        self._mp_layers[-1].build(
-                            MessagePassingInput(embedded_shape, adjacency_list_shapes)
-                        )
+                        if self.share_weights_between_mlps and len(self._mp_layers)!=0:
+                            """ All mlp layers share the same weights """
+                            self._mp_layers.append(self._mp_layers[-1])
+                        else:
+                            self._mp_layers.append(
+                                self._message_passing_class(self._params)
+                            )
+                            self._mp_layers[-1].build(
+                                MessagePassingInput(embedded_shape, adjacency_list_shapes)
+                            )
 
                     # If required, prepare for a LayerNorm:
                     if self._use_inter_layer_layernorm:
