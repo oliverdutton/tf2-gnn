@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, Set
+import csv
 
 import numpy as np
 import tensorflow as tf
@@ -68,6 +69,7 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
     """
     Sudoku Dataset class.
     """
+    adjacency_list = sudoku_edges()
 
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
@@ -110,6 +112,9 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         return data_directory
 
     def load_data(self, path: RichPath, folds_to_load: Optional[Set[DataFold]] = None) -> None:
+        """ Return list of SudokuGraphSamples """
+
+
         """Load the data from disk."""
         if path is None:
             path = RichPath.create(self.default_data_directory())
@@ -120,13 +125,13 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
             folds_to_load = {DataFold.TRAIN, DataFold.VALIDATION, DataFold.TEST}
 
         if DataFold.TRAIN in folds_to_load:
-            self._loaded_data[DataFold.TRAIN] = self.__load_data(path.join("train.jsonl.gz"))
+            self._loaded_data[DataFold.TRAIN] = self.__load_data(path.join("train.csv"))
             logger.debug("Done loading training data.")
         if DataFold.VALIDATION in folds_to_load:
-            self._loaded_data[DataFold.VALIDATION] = self.__load_data(path.join("valid.jsonl.gz"))
+            self._loaded_data[DataFold.VALIDATION] = self.__load_data(path.join("valid.csv"))
             logger.debug("Done loading validation data.")
         if DataFold.TEST in folds_to_load:
-            self._loaded_data[DataFold.TEST] = self.__load_data(path.join("test.jsonl.gz"))
+            self._loaded_data[DataFold.TEST] = self.__load_data(path.join("test.csv"))
             logger.debug("Done loading test data.")
 
     def load_data_from_list(
@@ -135,25 +140,28 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         raise NotImplementedError()
 
     def __load_data(self, data_file: RichPath) -> List[SudokuGraphSample]:
-        data = list(
-            data_file.read_by_file_suffix()
-        )  # list() needed for .jsonl case, where .read*() is just a generator
-        return self.__process_raw_graphs(data)
+        def read_csv(data_file):
+            with open(data_file) as f:
+                reader = csv.reader(f, delimiter=',')
+                data = [(q, a) for q, a in reader]
+                return np.asarray(data)
+
+        def parse(x):
+            return list(map(int, list(x)))
+
+        data = read_csv(data_file.__str__())
+        encoded = [(parse(q), parse(a)) for q, a in data]
+
+        return self.__process_raw_graphs(encoded)
 
     def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[SudokuGraphSample]:
-        processed_graphs = []
-        for d in raw_data:
-            (type_to_adjacency_list, type_to_num_incoming_edges) = self.__graph_to_adjacency_lists(
-                d["graph"], num_nodes=len(d["node_features"])
-            )
-            processed_graphs.append(
-                SudokuGraphSample(
-                    adjacency_lists=type_to_adjacency_list,
-                    type_to_node_to_num_incoming_edges=type_to_num_incoming_edges,
-                    node_features=d["node_features"],
-                    target_values=d["targets"][self.params["task_id"]][0],
-                )
-            )
+        processed_graphs = [SudokuGraphSample(
+            adjacency_lists=self.adjacency_list,
+            type_to_node_to_num_incoming_edges=tf.fill((81,), value=20),
+            node_features=tf.one_hot(q, 10),
+            target_values=tf.one_hot(a, 10),
+        ) for q, a in raw_data]
+        
         return processed_graphs
 
     def __graph_to_adjacency_lists(
