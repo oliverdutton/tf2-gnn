@@ -160,7 +160,7 @@ class GNN(tf.keras.layers.Layer):
                             self._inter_layer_layernorms[-1].build(embedded_shape)
 
                     # Construct the per-node dense layers.
-                    if layer_idx % self._dense_every_num_layers == 0:
+                    if layer_idx % self._dense_every_num_layers == 0 and self._dense_every_num_layers != -1:
                         with tf.name_scope(f"Dense"):
                             self._dense_layers[str(layer_idx)] = tf.keras.layers.Dense(
                                 units=self._hidden_dim,
@@ -321,7 +321,7 @@ class GNN(tf.keras.layers.Layer):
                 )
 
             # Apply dense layer, if needed.
-            if layer_idx % self._dense_every_num_layers == 0:
+            if layer_idx % self._dense_every_num_layers == 0 and self._dense_every_num_layers != -1:
                 cur_node_representations = self._dense_layers[str(layer_idx)](
                     cur_node_representations, training=training
                 )
