@@ -44,31 +44,30 @@ def sudoku_edges(bidirectional=True):
         return ordered_pairs
 
 class SudokuGraphSample(GraphSample):
-    """Data structure holding a single Sudoku graph.
-    
-    
+    """
+    Data structure holding a single Sudoku graph.  
     """
 
     def __init__(
         self,
         adjacency_lists: List[np.ndarray],
         type_to_node_to_num_incoming_edges: np.ndarray,
-        node_features: List[np.ndarray],
-        target_values: np.ndarray,
+        node_features: np.ndarray,
+        node_labels: np.ndarray,
     ):
         super().__init__(adjacency_lists, type_to_node_to_num_incoming_edges, node_features)
-        self._target_values = target_values
+        self._node_labels = node_labels
 
     @property
-    def target_values(self) -> float:
-        """Target value of the regression task."""
-        return self._target_values
+    def node_labels(self) -> float:
+        """Target class, the sudoku output value"""
+        return self._node_labels
 
     def __str__(self):
         return (
             f"Adj:            {self._adjacency_lists}\n"
             f"Node_features:  {self._node_features}\n"
-            f"target_valuess:  {self._target_values}"
+            f"node_labels:  {self._node_labels}"
         )
 
 class SudokuDataset(GraphDataset[SudokuGraphSample]):
@@ -116,6 +115,7 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
     def num_edge_types(self) -> int:
         return self._num_edge_types
 
+    # -------------------- Data Loading --------------------
     @classmethod
     def default_data_directory(cls):
         curr_dir = Path(os.path.abspath(inspect.getsourcefile(lambda: 0)))
@@ -171,22 +171,32 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
         processed_graphs = [SudokuGraphSample(
             adjacency_lists=self.type_to_adjacency_list,
             type_to_node_to_num_incoming_edges=self.type_to_num_incoming_edges,
-            node_features=tf.one_hot(q, 10),
-            target_values=tf.one_hot(a, 10),
+            node_features=tf.one_hot(q, 10).numpy(),
+            node_labels=tf.one_hot(a, 10)[:,1:].numpy(),
         ) for q, a in raw_data]
         
         return processed_graphs
 
     @property
+    def num_node_target_labels(self) -> int:
+        return 9
+
+    @property
     def node_feature_shape(self) -> Tuple:
-        """Return the shape of the node features."""
-        if self._node_feature_shape is None:
-            some_data_fold = next(iter(self._loaded_data.values()))
-            self._node_feature_shape = (len(some_data_fold[0].node_features[0]),)
-        return self._node_feature_shape
+        some_data_fold = next(iter(self._loaded_data.values()))
+        return (some_data_fold[0].node_features.shape[-1],)
+
+    # -------------------- Minibatching -------------------- from PPIDataset
+    def get_batch_tf_data_description(self) -> GraphBatchTFDataDescription:
+        data_description = super().get_batch_tf_data_description()
+        return GraphBatchTFDataDescription(
+            batch_features_types=data_description.batch_features_types,
+            batch_features_shapes=data_description.batch_features_shapes,
+            batch_labels_types={**data_description.batch_labels_types, "node_labels": tf.float32},
+            batch_labels_shapes={**data_description.batch_labels_shapes, "node_labels": (None, None)},
+        )
 
     def _graph_iterator(self, data_fold: DataFold) -> Iterator[SudokuGraphSample]:
-        logger.debug("Sudoku graph iterator requested.")
         loaded_data = self._loaded_data[data_fold]
         if data_fold == DataFold.TRAIN:
             np.random.shuffle(loaded_data)
@@ -194,25 +204,17 @@ class SudokuDataset(GraphDataset[SudokuGraphSample]):
 
     def _new_batch(self) -> Dict[str, Any]:
         new_batch = super()._new_batch()
-        new_batch["target_values"] = []
+        new_batch["node_labels"] = []
         return new_batch
 
-    def _add_graph_to_batch(self, raw_batch: Dict[str, Any], graph_sample: SudokuGraphSample) -> None:
+    def _add_graph_to_batch(self, raw_batch, graph_sample: SudokuGraphSample) -> None:
         super()._add_graph_to_batch(raw_batch, graph_sample)
-        raw_batch["target_values"].append(graph_sample.target_values)
+        raw_batch["node_labels"].append(graph_sample.node_labels)
 
     def _finalise_batch(self, raw_batch) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         batch_features, batch_labels = super()._finalise_batch(raw_batch)
-        return batch_features, {"target_values": raw_batch["target_values"]}
-
-    def get_batch_tf_data_description(self) -> GraphBatchTFDataDescription:
-        data_description = super().get_batch_tf_data_description()
-        return GraphBatchTFDataDescription(
-            batch_features_types=data_description.batch_features_types,
-            batch_features_shapes=data_description.batch_features_shapes,
-            batch_labels_types={**data_description.batch_labels_types, "target_values": tf.float32},
-            batch_labels_shapes={**data_description.batch_labels_shapes, "target_values": (None,)},
-        )
+        batch_labels["node_labels"] = np.concatenate(raw_batch["node_labels"], axis=0)
+        return batch_features, batch_labels
 
 
 if __name__ == "__main__":
