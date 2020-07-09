@@ -27,11 +27,17 @@ class NodeMulticlassTask(GraphTaskModel):
     @classmethod
     def get_default_hyperparameters(cls, mp_style: Optional[str] = None) -> Dict[str, Any]:
         super_params = super().get_default_hyperparameters(mp_style)
-        these_hypers: Dict[str, Any] = {}
+        these_hypers: Dict[str, Any] = {
+            "loss_at_every_layer": False, # whether to apply loss for all layer results, setting this to True will override the option for use_intermediate_gnn_results to True
+        }
         super_params.update(these_hypers)
         return super_params
 
     def __init__(self, params: Dict[str, Any], dataset: GraphDataset, name: str = None):
+        if params['loss_at_every_layer']: # If loss at every layer required, 'use_intermediate_gnn_results' must be True, so it's overridden
+            params['use_intermediate_gnn_results'] = True
+        self._loss_at_every_layer = params.get("loss_at_every_layer", False)
+
         super().__init__(params, dataset=dataset, name=name)
         if not hasattr(dataset, "num_node_target_labels"):
             raise ValueError(f"Provided dataset of type {type(dataset)} does not provide num_node_target_labels information.")
@@ -45,17 +51,32 @@ class NodeMulticlassTask(GraphTaskModel):
         super().build(input_shapes)
 
     def compute_task_output(
-        self, batch_features, final_node_representations: tf.Tensor, training: bool
+        self, batch_features, final_node_representations, training: bool
     ):
-        per_node_logits = self.node_to_labels_layer(final_node_representations)
+        """ Different returns depending on _use_intermediate_gnn_results,
+        if False final_node_representations is tf.Tensor and we return per_node_logits as List[tf.tensor] of len(1)
+        if True final_node_representations is Tuple[tf.tensor, List[tf.tensor]] and we return per_node_logits as List[tf.tensor]
+        """ 
+
+        if not self._use_intermediate_gnn_results:
+            per_node_logits = [self.node_to_labels_layer(final_node_representations)]
+        else:
+            per_node_logits = [self.node_to_labels_layer(final_node_representations_per_layer) for final_node_representations_per_layer in final_node_representations[1]]
         return (per_node_logits,)
 
     def compute_task_metrics(
         self, batch_features, task_output, batch_labels
     ) -> Dict[str, tf.Tensor]:
         (per_node_logits,) = task_output
-        (loss, f1_score) = self._fast_task_metrics(per_node_logits, batch_labels["node_labels"])
+        """
+        If _loss_at_every_layer the f1_score for the final layer is returned but loss is calculated as the mean loss of each layer
+        """
 
+        if not self._loss_at_every_layer:
+            (loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])
+        else:            
+            f1_score = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])[1]
+            loss = tf.reduce_mean([self._fast_task_metrics(per_node_logits_per_layer, batch_labels["node_labels"])[0] for per_node_logits_per_layer in per_node_logits])
         return {"loss": loss, "f1_score": f1_score}
 
     @tf.function(input_signature=(tf.TensorSpec((None, None)), tf.TensorSpec((None, None))))
