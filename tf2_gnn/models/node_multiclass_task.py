@@ -75,7 +75,7 @@ class NodeMulticlassTask(GraphTaskModel):
         else:  
             """ If _loss_at_every_layer the f1_score for the final layer is returned but loss is calculated 
                     as the mean loss of each layer"""          
-            (final_layer_loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])[1]
+            (final_layer_loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])
             loss = tf.reduce_mean([self._fast_task_metrics(per_node_logits_per_layer, batch_labels["node_labels"])[0] for per_node_logits_per_layer in per_node_logits])
             return {"loss": loss, "f1_score": f1_score, "final_layer_loss": final_layer_loss}
 
