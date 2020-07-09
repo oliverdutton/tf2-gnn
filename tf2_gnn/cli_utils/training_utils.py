@@ -41,9 +41,10 @@ def train(
     save_dir: str,
     quiet: bool = False,
     aml_run=None,
+    use_worker_threads: bool = True,
 ):
-    train_data = dataset.get_tensorflow_dataset(DataFold.TRAIN).prefetch(3)
-    valid_data = dataset.get_tensorflow_dataset(DataFold.VALIDATION).prefetch(3)
+    train_data = dataset.get_tensorflow_dataset(DataFold.TRAIN, use_worker_threads=use_worker_threads).prefetch(3)
+    valid_data = dataset.get_tensorflow_dataset(DataFold.VALIDATION, use_worker_threads=use_worker_threads).prefetch(3)
 
     save_file = os.path.join(save_dir, f"{run_id}_best.pkl")
 
