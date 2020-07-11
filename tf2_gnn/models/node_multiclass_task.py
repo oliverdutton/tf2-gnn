@@ -67,17 +67,19 @@ class NodeMulticlassTask(GraphTaskModel):
     def compute_task_metrics(
         self, batch_features, task_output, batch_labels
     ) -> Dict[str, tf.Tensor]:
-        (per_node_logits,) = task_output
+        per_node_logits = tf.convert_to_tensor(task_output)[0]
+        (loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])
+        task_metrics = {"loss": loss, "f1_score": f1_score}
 
-        if not self._loss_at_every_layer:
-            (loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])
-            return {"loss": loss, "f1_score": f1_score}
-        else:  
+        sudoku_metrics = self._compute_sudoku_metrics(per_node_logits, batch_labels["node_labels"])
+        task_metrics.update(sudoku_metrics)
+
+        if self._loss_at_every_layer:
             """ If _loss_at_every_layer the f1_score for the final layer is returned but loss is calculated 
                     as the mean loss of each layer"""          
-            (final_layer_loss, f1_score) = self._fast_task_metrics(per_node_logits[-1], batch_labels["node_labels"])
-            loss = tf.reduce_mean([self._fast_task_metrics(per_node_logits_per_layer, batch_labels["node_labels"])[0] for per_node_logits_per_layer in per_node_logits])
-            return {"loss": loss, "f1_score": f1_score, "final_layer_loss": final_layer_loss}
+            every_layer_loss = tf.reduce_mean([self._fast_task_metrics(per_node_logits_per_layer, batch_labels["node_labels"])[0] for per_node_logits_per_layer in per_node_logits])
+            task_metrics.update({"loss":every_layer_loss, "final_layer_loss":loss})
+        return task_metrics
 
     @tf.function(input_signature=(tf.TensorSpec((None, None)), tf.TensorSpec((None, None))))
     def _fast_task_metrics(self, per_node_logits, node_labels):
@@ -89,6 +91,30 @@ class NodeMulticlassTask(GraphTaskModel):
 
         return loss, f1_score
 
+    @staticmethod
+    def _compute_sudoku_metrics(per_node_logits, node_labels) -> Dict[str, tf.Tensor]:
+        n_nodes = per_node_logits.shape[1]
+        n_sudokus = int(per_node_logits.shape[1] / 81)
+
+        answers_one_hot = tf.reshape(node_labels, (n_sudokus,81,9))
+        answers_values = tf.argmax(input=output, axis=-1, output_type=tf.int32)+1
+
+        node_predictions_logits = tf.convert_to_tensor(per_node_logits)
+        n_layers = node_predictions_logits.shape[0]
+        sudoku_predictions_logits = tf.reshape(node_predictions_logits, (n_layers,n_sudokus,81,9))
+        sudoku_predictions_values = tf.argmax(input=sudoku_predictions_logits, axis=-1, output_type=tf.int32)+1
+
+        digits_correct = tf.equal(sudoku_predictions_values, answers_values)
+        digit_accs = tf.math.count_nonzero(digits_correct, axis=[1,2], dtype=tf.float32) / n_nodes
+
+        sudokus_correct = tf.reduce_all(digits_correct, axis=-1)
+        sudoku_accs = tf.math.count_nonzero(sudokus_correct, axis=1, dtype=tf.float32) / n_sudokus
+
+        return {'digit_accuracies_per_layer':digit_accs, 'final_layer_digit_accuracy':digit_accs[-1], 
+        'sudoku_accuracies_per_layer':sudoku_accs, 'final_layer_sudoku_accuracy':sudoku_accs[-1]}
+
     def compute_epoch_metrics(self, task_results: List[Any]) -> Tuple[float, str]:
         avg_microf1 = np.average([r["f1_score"] for r in task_results])
-        return -avg_microf1, f"Avg MicroF1: {avg_microf1:.3f}"
+        avg_digit_acc = np.average(r["final_layer_digit_accuracy"] for r in task_results)
+        avg_sudoku_acc = np.average(r["final_layer_sudoku_accuracy"] for r in task_results)
+        return -avg_digit_acc, f"Avg DigitAccuracy: {avg_digit_acc:.3f}, AvgSudokuAccuracy: {avg_sudoku_acc:.3f}, Avg MicroF1: {avg_microf1:.3f}"
