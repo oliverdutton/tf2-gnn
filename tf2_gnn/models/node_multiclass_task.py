@@ -97,7 +97,7 @@ class NodeMulticlassTask(GraphTaskModel):
         n_sudokus = int(per_node_logits.shape[1] / 81)
 
         answers_one_hot = tf.reshape(node_labels, (n_sudokus,81,9))
-        answers_values = tf.argmax(input=output, axis=-1, output_type=tf.int32)+1
+        answers_values = tf.argmax(input=answers_one_hot, axis=-1, output_type=tf.int32)+1
 
         node_predictions_logits = tf.convert_to_tensor(per_node_logits)
         n_layers = node_predictions_logits.shape[0]
