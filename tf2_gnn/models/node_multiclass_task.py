@@ -115,6 +115,6 @@ class NodeMulticlassTask(GraphTaskModel):
 
     def compute_epoch_metrics(self, task_results: List[Any]) -> Tuple[float, str]:
         avg_microf1 = np.average([r["f1_score"] for r in task_results])
-        avg_digit_acc = np.average(r["final_layer_digit_accuracy"] for r in task_results)
-        avg_sudoku_acc = np.average(r["final_layer_sudoku_accuracy"] for r in task_results)
+        avg_digit_acc = np.average([r["final_layer_digit_accuracy"] for r in task_results])
+        avg_sudoku_acc = np.average([r["final_layer_sudoku_accuracy"] for r in task_results])
         return -avg_digit_acc, f"Avg DigitAccuracy: {avg_digit_acc:.3f}, AvgSudokuAccuracy: {avg_sudoku_acc:.3f}, Avg MicroF1: {avg_microf1:.3f}"
