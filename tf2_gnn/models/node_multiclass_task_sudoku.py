@@ -55,4 +55,4 @@ class SudokuTask(NodeMulticlassTask):
         avg_microf1 = np.average([r["f1_score"] for r in task_results])
         avg_digit_acc = np.average([r["final_layer_digit_accuracy"] for r in task_results])
         avg_sudoku_acc = np.average([r["final_layer_sudoku_accuracy"] for r in task_results])
-        return -avg_digit_acc, f"AvgDigitAccuracy: {avg_digit_acc:.3f}, AvgSudokuAccuracy: {avg_sudoku_acc:.3f},\n Avg MicroF1: {avg_microf1:.3f}"
+        return -avg_digit_acc, f"AvgDigitAccuracy: {avg_digit_acc:.4f}, AvgSudokuAccuracy: {avg_sudoku_acc:.4f},\n Avg MicroF1: {avg_microf1:.4f}"
