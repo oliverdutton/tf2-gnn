@@ -14,9 +14,10 @@ def test(
     dataset: GraphDataset,
     log_fun: Callable[[str], None],
     quiet: bool = False,
+    use_worker_threads: bool = False,
 ):
     log_fun("== Running on test dataset")
-    test_data = dataset.get_tensorflow_dataset(DataFold.TEST)
+    test_data = dataset.get_tensorflow_dataset(DataFold.TEST, use_worker_threads=use_worker_threads)
     _, _, test_results = model.run_one_epoch(test_data, training=False, quiet=quiet)
     test_metric, test_metric_string = model.compute_epoch_metrics(test_results)
     log_fun(test_metric_string)
