@@ -3,3 +3,5 @@ from .node_multiclass_task import NodeMulticlassTask
 from .graph_regression_task import GraphRegressionTask
 from .graph_binary_classification_task import GraphBinaryClassificationTask
 from .node_multiclass_task_sudoku import SudokuTask
+from .node_regression_task import NodeRegressionTask
+from .node_regression_task_pss import PSSTask

@@ -4,3 +4,4 @@ from .jsonl_graph_property_dataset import JsonLGraphPropertyDataset
 from .ppi_dataset import PPIDataset
 from .qm9_dataset import QM9Dataset
 from .sudoku_dataset import SudokuDataset
+from .pss_dataset import PSSDataset

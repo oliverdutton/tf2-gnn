@@ -78,7 +78,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
         return {
-            "connectivity":5
+            "connectivity":5,
             "max_nodes_per_batch": 2700,
             "add_self_loop_edges": True,
             "tie_fwd_bkwd_edges": True,
@@ -102,7 +102,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         )
 
         self._node_feature_shape = None
-        self._loaded_data: Dict[DataFold, List[SudokuGraphSample]] = {}
+        self._loaded_data: Dict[DataFold, List[PSSGraphSample]] = {}
         logger.debug("Done initialising protein secondary structure dataset.")
 
     @property
@@ -131,13 +131,13 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
             folds_to_load = {DataFold.TRAIN, DataFold.VALIDATION, DataFold.TEST}
 
         if DataFold.TRAIN in folds_to_load:
-            self._loaded_data[DataFold.TRAIN] = self.__load_data(path.join("train.csv"))
+            self._loaded_data[DataFold.TRAIN] = self.__load_data(path.join("train.json"))
             logger.debug("Done loading training data.")
         if DataFold.VALIDATION in folds_to_load:
-            self._loaded_data[DataFold.VALIDATION] = self.__load_data(path.join("valid.csv"))
+            self._loaded_data[DataFold.VALIDATION] = self.__load_data(path.join("valid.json"))
             logger.debug("Done loading validation data.")
         if DataFold.TEST in folds_to_load:
-            self._loaded_data[DataFold.TEST] = self.__load_data(path.join("test.csv"))
+            self._loaded_data[DataFold.TEST] = self.__load_data(path.join("test.json"))
             logger.debug("Done loading test data.")
 
     def load_data_from_list(
@@ -155,7 +155,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
 
         data = data_file.read_by_file_suffix()
         # .json expected which is read as a dict with keys 'X' and 'Y' 
-        encoded = [(parse(sequence), secondary_structure) for sequence, secondary_structure in zip(raw_data['X'], raw_data['Y'])]
+        encoded = [(parse(sequence), secondary_structure) for sequence, secondary_structure in zip(data['X'], data['Y'])]
 
         return self.__process_raw_graphs(encoded)
 
@@ -170,7 +170,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
                     adjacency_lists=type_to_adjacency_list,
                     type_to_node_to_num_incoming_edges=type_to_num_incoming_edges,
                     node_features=node_features,
-                    target_value=node_values,
+                    node_values=node_values,
                 )
             )
         return processed_graphs
@@ -181,7 +181,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         connectivity option"""
         connectivity = self._params['connectivity']
 
-        graph_list = [list(zip(range(num_nodes), [i]*num_nodes,range(i,num_nodes))) for i in range(1,connectivity+1)]
+        graph_list = [list(zip(range(num_nodes), [i-1]*num_nodes,range(i,num_nodes))) for i in range(1,connectivity+1)]
         graph = reduce(lambda x,y:x+y, graph_list)
 
         return self.__graph_to_adjacency_lists(
@@ -204,7 +204,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         )
 
     @property
-    def num_node_target_values(self) -> int:
+    def num_node_target_labels(self) -> int:
         return 1
 
     @property
@@ -218,11 +218,11 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         return GraphBatchTFDataDescription(
             batch_features_types=data_description.batch_features_types,
             batch_features_shapes=data_description.batch_features_shapes,
-            batch_values_types={**data_description.batch_values_types, "node_values": tf.float32},
-            batch_values_shapes={**data_description.batch_values_shapes, "node_values": (None, None)},
+            batch_labels_types={**data_description.batch_labels_types, "node_values": tf.float32},
+            batch_labels_shapes={**data_description.batch_labels_shapes, "node_values": (None,)},
         )
 
-    def _graph_iterator(self, data_fold: DataFold) -> Iterator[SudokuGraphSample]:
+    def _graph_iterator(self, data_fold: DataFold) -> Iterator[PSSGraphSample]:
         loaded_data = self._loaded_data[data_fold]
         if data_fold == DataFold.TRAIN:
             np.random.shuffle(loaded_data)
@@ -233,7 +233,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         new_batch["node_values"] = []
         return new_batch
 
-    def _add_graph_to_batch(self, raw_batch, graph_sample: SudokuGraphSample) -> None:
+    def _add_graph_to_batch(self, raw_batch, graph_sample: PSSGraphSample) -> None:
         super()._add_graph_to_batch(raw_batch, graph_sample)
         raw_batch["node_values"].append(graph_sample.node_values)
 
