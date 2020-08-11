@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class PSSGraphSample(GraphSample):
     """
     Data structure holding a protein graph.
-    Nodes for each amino acid, node_labels of 
+    Nodes for each amino acid, node_values of 
     the secondary structure attributed
     """
 
@@ -27,21 +27,21 @@ class PSSGraphSample(GraphSample):
         adjacency_lists: List[np.ndarray],
         type_to_node_to_num_incoming_edges: np.ndarray,
         node_features: np.ndarray,
-        node_labels: np.ndarray,
+        node_values: np.ndarray,
     ):
         super().__init__(adjacency_lists, type_to_node_to_num_incoming_edges, node_features)
-        self._node_labels = node_labels
+        self._node_values = node_values
 
     @property
-    def node_labels(self) -> float:
+    def node_values(self) -> float:
         """Target secondary structure value"""
-        return self._node_labels
+        return self._node_values
 
     def __str__(self):
         return (
             f"Adj:            {self._adjacency_lists}\n"
             f"Node_features:  {self._node_features}\n"
-            f"node_labels:  {self._node_labels}"
+            f"node_values:  {self._node_values}"
         )
 
 class PSSDataset(GraphDataset[PSSGraphSample]):
@@ -51,6 +51,30 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
     connectivity is up to how many amino acids away a particular
         amino acid each amino acid has an edge to
     """
+
+    str_to_int = {
+    'A': 0,
+    'C': 1,
+    'D': 2,
+    'E': 3,
+    'F': 4,
+    'G': 5,
+    'H': 6,
+    'I': 7,
+    'K': 8,
+    'L': 9,
+    'M': 10,
+    'N': 11,
+    'P': 12,
+    'Q': 13,
+    'R': 14,
+    'S': 15,
+    'T': 16,
+    'V': 17,
+    'W': 18,
+    'Y': 19
+    }
+
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
         return {
@@ -122,23 +146,31 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         raise NotImplementedError()
 
     def __load_data(self, data_file: RichPath) -> List[PSSGraphSample]:
+        def parse(sequence: str) -> tf.Tensor:
+            """ Returns one_hot encoding of sequence
+            sequence: str of length n
+            output: tf.Tensor of dim (n,20) """
+            int_representation = [self.str_to_int[letter] for letter in sequence]
+            return tf.one_hot(int_representation, 20)
+
         data = data_file.read_by_file_suffix()
         # .json expected which is read as a dict with keys 'X' and 'Y' 
-        
-        return self.__process_raw_graphs(data)
+        encoded = [(parse(sequence), secondary_structure) for sequence, secondary_structure in zip(raw_data['X'], raw_data['Y'])]
 
-    def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[SudokuGraphSample]:
+        return self.__process_raw_graphs(encoded)
+
+    def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[PSSGraphSample]:
         processed_graphs = []
-        for node_features, node_labels in zip(raw_data['X'],raw_data['Y']):
+        for node_features, node_values in raw_data:
             (type_to_adjacency_list, type_to_num_incoming_edges) = self.__sequence_to_adjacency_lists(
-                num_nodes=len(node_features)
+                num_nodes=len(node_values)
             )
             processed_graphs.append(
                 PSSGraphSample(
                     adjacency_lists=type_to_adjacency_list,
                     type_to_node_to_num_incoming_edges=type_to_num_incoming_edges,
                     node_features=node_features,
-                    target_value=node_labels,
+                    target_value=node_values,
                 )
             )
         return processed_graphs
@@ -172,7 +204,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         )
 
     @property
-    def num_node_target_labels(self) -> int:
+    def num_node_target_values(self) -> int:
         return 1
 
     @property
@@ -186,8 +218,8 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         return GraphBatchTFDataDescription(
             batch_features_types=data_description.batch_features_types,
             batch_features_shapes=data_description.batch_features_shapes,
-            batch_labels_types={**data_description.batch_labels_types, "node_labels": tf.float32},
-            batch_labels_shapes={**data_description.batch_labels_shapes, "node_labels": (None, None)},
+            batch_values_types={**data_description.batch_values_types, "node_values": tf.float32},
+            batch_values_shapes={**data_description.batch_values_shapes, "node_values": (None, None)},
         )
 
     def _graph_iterator(self, data_fold: DataFold) -> Iterator[SudokuGraphSample]:
@@ -198,17 +230,17 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
 
     def _new_batch(self) -> Dict[str, Any]:
         new_batch = super()._new_batch()
-        new_batch["node_labels"] = []
+        new_batch["node_values"] = []
         return new_batch
 
     def _add_graph_to_batch(self, raw_batch, graph_sample: SudokuGraphSample) -> None:
         super()._add_graph_to_batch(raw_batch, graph_sample)
-        raw_batch["node_labels"].append(graph_sample.node_labels)
+        raw_batch["node_values"].append(graph_sample.node_values)
 
     def _finalise_batch(self, raw_batch) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        batch_features, batch_labels = super()._finalise_batch(raw_batch)
-        batch_labels["node_labels"] = np.concatenate(raw_batch["node_labels"], axis=0)
-        return batch_features, batch_labels
+        batch_features, batch_values = super()._finalise_batch(raw_batch)
+        batch_values["node_values"] = np.concatenate(raw_batch["node_values"], axis=0)
+        return batch_features, batch_values
 
 
 if __name__ == "__main__":
