@@ -50,10 +50,12 @@ class NodeRegressionTask(GraphTaskModel):
     def compute_task_metrics(
         self, batch_features, task_output, batch_labels
     ) -> Dict[str, tf.Tensor]:
-        (per_node_results,) = task_output
-        mse = tf.losses.mean_squared_error(batch_labels["node_values"], task_output)
-        mae = tf.losses.mean_absolute_error(batch_labels["node_values"], task_output)
-        n_nodes = batch_labels["node_values"].shape[0]
+        (node_predictions,) = task_output
+        node_values = batch_labels["node_values"]
+
+        mse = tf.losses.mean_squared_error(node_values, node_predictions[-1])
+        mae = tf.losses.mean_absolute_error(node_values, node_predictions[-1])
+        n_nodes = node_values.shape[0]
         task_metrics = {
             "loss": mse,
             "mse": mse,
@@ -64,7 +66,7 @@ class NodeRegressionTask(GraphTaskModel):
         if self._loss_at_every_layer:
             """ If _loss_at_every_layer the f1_score for the final layer is returned but loss is calculated 
                     as the mean loss of each layer"""          
-            every_layer_mse = tf.reduce_mean([tf.losses.mean_squared_error(per_node_results_per_layer, batch_labels["node_labels"]) for per_node_results_per_layer in per_node_results])
+            every_layer_mse = tf.reduce_mean([tf.losses.mean_squared_error(node_predictions_per_layer, node_values) for node_predictions_per_layer in node_predictions])
             task_metrics.update({"loss":every_layer_mse, "final_layer_loss":mse})
         return task_metrics
 
