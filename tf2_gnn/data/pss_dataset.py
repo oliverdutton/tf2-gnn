@@ -149,14 +149,17 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
         def parse(sequence: str) -> tf.Tensor:
             """ Returns one_hot encoding of sequence
             sequence: str of length n
-            output: tf.Tensor of dim (n,20) """
-            int_representation = [self.str_to_int[letter] for letter in sequence]
-            return tf.one_hot(int_representation, 20)
+            output: tf.Tensor of dim (n,21)
+            the 21 is made up of the aa position followed by 
+            one hot of the 20 possible amino acids"""
+            int_representation = [str_to_int[letter] for letter in sequence]
+            aa = tf.one_hot(int_representation, 20, dtype="int32")
+            pos = tf.expand_dims(tf.range(0,aa.shape[0]), axis=-1)
+            return tf.concat([pos, aa], axis=1)
 
         data = data_file.read_by_file_suffix()
         # .json expected which is read as a dict with keys 'X' and 'Y' 
         encoded = [(parse(sequence), secondary_structure) for sequence, secondary_structure in zip(data['X'], data['Y'])]
-
         return self.__process_raw_graphs(encoded)
 
     def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[PSSGraphSample]:
