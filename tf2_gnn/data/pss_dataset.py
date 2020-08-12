@@ -152,7 +152,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
             output: tf.Tensor of dim (n,21)
             the 21 is made up of the aa position followed by 
             one hot of the 20 possible amino acids"""
-            int_representation = [str_to_int[letter] for letter in sequence]
+            int_representation = [self.str_to_int[letter] for letter in sequence]
             aa = tf.one_hot(int_representation, 20, dtype="int32")
             pos = tf.expand_dims(tf.range(0,aa.shape[0]), axis=-1)
             return tf.concat([pos, aa], axis=1)
