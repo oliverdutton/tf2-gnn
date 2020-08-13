@@ -153,8 +153,8 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
             the 21 is made up of the aa position followed by 
             one hot of the 20 possible amino acids"""
             int_representation = [self.str_to_int[letter] for letter in sequence]
-            aa = tf.one_hot(int_representation, 20, dtype="int32")
-            pos = tf.expand_dims(tf.range(0,aa.shape[0]), axis=-1)
+            aa = tf.one_hot(int_representation, 20, dtype="int16")
+            pos = tf.expand_dims(tf.range(0,aa.shape[0], dtype="int16"), axis=-1)
             return tf.concat([pos, aa], axis=1)
 
         data = data_file.read_by_file_suffix()
