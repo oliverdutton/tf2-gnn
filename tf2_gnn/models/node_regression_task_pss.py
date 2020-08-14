@@ -33,7 +33,7 @@ class PSSTask(NodeRegressionTask):
         node_values, node_predictions = node_values[mask], tf.boolean_mask(node_predictions, mask, axis=1)
         """ Repack outputs """
         task_output, batch_labels["node_values"] = (node_predictions,), node_values
-        return super().compute_task_output(batch_features, task_output, batch_labels)
+        return super().compute_task_metrics(batch_features, task_output, batch_labels)
 
 
 class PSSTask_Classes(NodeMulticlassTask):
