@@ -10,13 +10,13 @@ class PSSTask(NodeRegressionTask):
     def __init__(self, params: Dict[str, Any], dataset: GraphDataset, name: str = None):
         super().__init__(params, dataset=dataset, name=name)
      
-    def compute_task_output(
-        self, batch_features, final_node_representations, training: bool
-    ):
-        (per_node_results,) = super().compute_task_output(batch_features, final_node_representations, training)
-        """ Output layer to scale for output range [1,3) to fit secondary structure"""
-        per_node_results = tf.sigmoid(per_node_results)*2+1
-        return (per_node_results,)
+    # def compute_task_output(
+    #     self, batch_features, final_node_representations, training: bool
+    # ):
+    #     (per_node_results,) = super().compute_task_output(batch_features, final_node_representations, training)
+    #     """ Output layer to scale for output range [1,3) to fit secondary structure"""
+    #     per_node_results = tf.sigmoid(per_node_results)*2+1
+    #     return (per_node_results,)
 
     def compute_task_metrics(
         self, batch_features, task_output, batch_labels
