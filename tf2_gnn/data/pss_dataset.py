@@ -157,9 +157,12 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
             pos = tf.expand_dims(tf.range(0,aa.shape[0]), axis=-1)
             return tf.concat([pos, aa], axis=1)
 
+        def parse_ss(secondary_structure: np.ndarray) -> tf.Tensor:
+            return tf.constant(secondary_structure, shape=(len(secondary_structure),1))
+
         data = data_file.read_by_file_suffix()
         # .json expected which is read as a dict with keys 'X' and 'Y' 
-        encoded = [(parse(sequence), secondary_structure) for sequence, secondary_structure in zip(data['X'], data['Y'])]
+        encoded = [(parse(sequence), parse_ss(secondary_structure)) for sequence, secondary_structure in zip(data['X'], data['Y'])]
         return self.__process_raw_graphs(encoded)
 
     def __process_raw_graphs(self, raw_data: Iterable[Any]) -> List[PSSGraphSample]:
@@ -222,7 +225,7 @@ class PSSDataset(GraphDataset[PSSGraphSample]):
             batch_features_types=data_description.batch_features_types,
             batch_features_shapes=data_description.batch_features_shapes,
             batch_labels_types={**data_description.batch_labels_types, "node_values": tf.float32},
-            batch_labels_shapes={**data_description.batch_labels_shapes, "node_values": (None,)},
+            batch_labels_shapes={**data_description.batch_labels_shapes, "node_values": (None, None)},
         )
 
     def _graph_iterator(self, data_fold: DataFold) -> Iterator[PSSGraphSample]:
