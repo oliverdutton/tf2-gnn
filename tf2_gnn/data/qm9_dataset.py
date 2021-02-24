@@ -48,16 +48,20 @@ class QM9Dataset(GraphDataset[QM9GraphSample]):
 
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
-        return {
+        super_hypers = super().get_default_hyperparameters()
+        this_hypers = {
             "max_nodes_per_batch": 10000,
             "add_self_loop_edges": True,
             "tie_fwd_bkwd_edges": True,
             "task_id": 0,
         }
+        super_hypers.update(this_hypers)
 
-    def __init__(self, params: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None):
+        return super_hypers
+
+    def __init__(self, params: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None, **kwargs):
         logger.info("Initialising QM9 Dataset.")
-        super().__init__(params, metadata=metadata)
+        super().__init__(params, metadata=metadata, **kwargs)
         self._params = params
         self._num_fwd_edge_types = 4
 
@@ -136,9 +140,10 @@ class QM9Dataset(GraphDataset[QM9GraphSample]):
     def __graph_to_adjacency_lists(
         self, graph: Iterable[Tuple[int, int, int]], num_nodes: int
     ) -> Tuple[List[np.ndarray], np.ndarray]:
-        raw_adjacency_lists = [[] for _ in range(self.num_edge_types)]
+        raw_adjacency_lists = [[] for _ in range(self._num_fwd_edge_types)]
 
         for src, edge_type, dest in graph:
+            edge_type = edge_type - 1  # Raw QM9 data counts from 1, we use 0-based indexing...
             raw_adjacency_lists[edge_type].append((src, dest))
 
         return process_adjacency_lists(

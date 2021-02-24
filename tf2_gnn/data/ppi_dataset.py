@@ -30,18 +30,22 @@ class PPIGraphSample(GraphSample):
 class PPIDataset(GraphDataset[PPIGraphSample]):
     @classmethod
     def get_default_hyperparameters(cls) -> Dict[str, Any]:
-        return {
+        super_hypers = super().get_default_hyperparameters()
+        this_hypers = {
             "max_nodes_per_batch": 10000,
             "add_self_loop_edges": True,
             "tie_fwd_bkwd_edges": False,
         }
+        super_hypers.update(this_hypers)
+
+        return super_hypers
 
     @staticmethod
     def default_data_path() -> str:
         return "data/ppi"
 
-    def __init__(self, params: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None):
-        super().__init__(params, metadata=metadata)
+    def __init__(self, params: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(params, metadata=metadata, **kwargs)
 
         self._tied_fwd_bkwd_edge_types = get_tied_edge_types(
             tie_fwd_bkwd_edges=params["tie_fwd_bkwd_edges"], num_fwd_edge_types=1,
